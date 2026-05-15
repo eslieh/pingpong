@@ -7,6 +7,7 @@ const {
   handlePreflight,
   getClientIp,
 } = require('./lib/cors');
+const { getPerMessageDeflateOption } = require('./lib/ws-config');
 
 const hostname = process.env.HOST || '0.0.0.0';
 const port = Number(process.env.WS_PORT || process.env.PORT || 8081);
@@ -129,7 +130,7 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({
   noServer: true,
-  perMessageDeflate: false,
+  perMessageDeflate: getPerMessageDeflateOption(),
 });
 
 httpServer.on('upgrade', (req, socket, head) => {
@@ -231,12 +232,21 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('error', (err) => {
+    if (err.code === 'WS_ERR_UNEXPECTED_RSV_1') {
+      console.error(`[socket error] room=${roomId} compression mismatch (RSV1). Redeploy server or set WS_DISABLE_DEFLATE=1 and disable proxy compression.`);
+      return;
+    }
     console.error(`[socket error] room=${roomId} role=${role} code=${err.code || 'unknown'} message=${err.message}`);
   });
 });
 
 wss.on('error', (err) => {
   console.error(`[server error] ${err.message}`);
+});
+
+httpServer.on('clientError', (err, socket) => {
+  console.error(`[http client error] ${err.message}`);
+  if (!socket.destroyed) socket.destroy();
 });
 
 httpServer.listen(port, hostname, () => {
@@ -247,6 +257,8 @@ httpServer.listen(port, hostname, () => {
   console.log(`  WS:      ws://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}/ws`);
   console.log(`  Health:  http://${hostname === '0.0.0.0' ? 'localhost' : hostname}:${port}/health`);
   console.log(`  Bound:   ${hostname}:${port}`);
+  const deflate = getPerMessageDeflateOption();
+  console.log(`  Deflate: ${deflate ? 'on (default, fixes RSV1 behind proxies)' : 'off'}`);
   if (allowed.length > 0) {
     console.log(`  CORS:    ${allowed.join(', ')}`);
   } else if (process.env.NODE_ENV === 'production') {
