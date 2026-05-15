@@ -1,5 +1,6 @@
 const { createServer } = require('http');
 const { WebSocketServer } = require('ws');
+require("dotenv").config()
 const {
   parseAllowedOrigins,
   isOriginAllowed,
