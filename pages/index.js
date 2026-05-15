@@ -53,9 +53,30 @@ function getWebSocketUrl(roomId, playerId) {
   return `${protocol}://${window.location.hostname}:${wsPort}/ws?room=${roomId}&player=${playerId}`;
 }
 
+function getMixedContentWarning() {
+  if (typeof window === 'undefined') return null;
+
+  const configuredUrl = process.env.NEXT_PUBLIC_WS_URL;
+  if (!configuredUrl) return null;
+
+  try {
+    const wsUrl = new URL(configuredUrl);
+    if (window.location.protocol === 'http:' && wsUrl.protocol === 'wss:') {
+      return 'Browsers block wss:// from an http:// page. Use the game on https (Vercel), or use ws://127.0.0.1:8081 locally via .env.development.local.';
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function getConnectionHelpLine() {
+  const mixedContent = getMixedContentWarning();
+  if (mixedContent) return mixedContent;
+
   if (process.env.NEXT_PUBLIC_WS_URL) {
-    return 'Check that the game server is running and ALLOWED_ORIGINS includes this site.';
+    return `Add ${typeof window !== 'undefined' ? window.location.origin : 'your site origin'} to ALLOWED_ORIGINS on the VPS. Postman works without Origin; browsers do not.`;
   }
 
   if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
@@ -360,6 +381,17 @@ export default function Home() {
     let connectTimer = null;
     const wsUrl = getWebSocketUrl(nextRoomId, playerId);
     setSocketUrl(wsUrl.replace(/player=[^&]+/, 'player=...'));
+
+    const mixedContent = getMixedContentWarning();
+    if (mixedContent) {
+      setStatus({ text: 'Blocked by browser', kind: 'error' });
+      setOverlay({
+        title: 'Connection Blocked',
+        line1: mixedContent,
+        line2: 'Postman can still connect; browsers enforce https/wss rules.',
+      });
+      return;
+    }
 
     const showConnectionFailed = () => {
       setStatus({ text: 'Connection failed', kind: 'error' });

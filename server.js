@@ -6,6 +6,7 @@ const {
   applyCorsHeaders,
   handlePreflight,
   getClientIp,
+  describeOriginRejection,
 } = require('./lib/cors');
 const { getPerMessageDeflateOption } = require('./lib/ws-config');
 
@@ -139,8 +140,11 @@ httpServer.on('upgrade', (req, socket, head) => {
   const path = url.pathname;
 
   if (!isOriginAllowed(origin)) {
-    console.log(`[upgrade rejected] origin=${origin || 'none'} path=${path}`);
-    socket.write('HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\n\r\nOrigin not allowed\r\n');
+    console.log(`[upgrade rejected] origin=${origin || 'none'} path=${path} — ${describeOriginRejection(origin)}`);
+    const body = `Origin not allowed. ${describeOriginRejection(origin)}`;
+    socket.write(
+      `HTTP/1.1 403 Forbidden\r\nContent-Type: text/plain\r\nContent-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
+    );
     socket.destroy();
     return;
   }
